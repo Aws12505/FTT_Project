@@ -118,51 +118,66 @@ private function flattenOne(TimeOffRequest $r): array
      * Extracts only the fields you care about from the webhook payloads.
      */
     private function extractAttributes(Request $request): array
-    {
-        $p = $request->all();
+{
+    $p = $request->all();
 
-        // Name: prefer Name.FirstAndLast, fallback to "First Last"
-        $firstAndLast = data_get($p, 'Name.FirstAndLast');
-        $fallbackName = trim(
-            trim((string) data_get($p, 'Name.First', '')) . ' ' .
-            trim((string) data_get($p, 'Name.Last', ''))
-        );
-        $fullName = $firstAndLast ?: $fallbackName;
+    // Name: prefer Name.FirstAndLast, fallback to "First Last"
+    $firstAndLast = data_get($p, 'Name.FirstAndLast');
+    $fallbackName = trim(
+        trim((string) data_get($p, 'Name.First', '')) . ' ' .
+        trim((string) data_get($p, 'Name.Last', ''))
+    );
+    $fullName = $firstAndLast ?: $fallbackName;
 
-        // Dates can come from RequestedTimeOff or PaidTimeOff (only one active per form)
-        $group = data_get($p, 'RequestedTimeOff') ?: data_get($p, 'PaidTimeOff') ?: [];
+    // Pull both groups (ensure arrays)
+    $requested = (array) (data_get($p, 'RequestedTimeOff') ?: []);
+    $paid      = (array) (data_get($p, 'PaidTimeOff') ?: []);
 
-        $dateKeys = [
-            'DateOfFirstDayOff',
-            'DateOfSecondDayOff',
-            'DateOfThirdDayOff',
-            'DateOfForthDayOff',
-            'DateOfFifthDayOff',
-            'DateOfSixthDayOff',
-            'DateOfSeventhDayOff',
-        ];
+    // Choose the group by which one has a non-null DateOfFirstDayOff
+    $requestedFirst = Arr::get($requested, 'DateOfFirstDayOff');
+    $paidFirst      = Arr::get($paid, 'DateOfFirstDayOff');
 
-        $parsedDates = [];
-        foreach ($dateKeys as $idx => $key) {
-            $val = Arr::get($group, $key);
-            $parsedDates[$idx] = $this->parseDateOrNull($val); // returns Y-m-d or null
-        }
-
-        return [
-            'full_id'              => data_get($p, 'Id'), // e.g. "54-562"
-            'full_name'            => $fullName,
-            'date_submitted'       => $this->parseDateTimeOrNull(data_get($p, 'Entry.DateSubmitted')),
-            'time_off_type'        => data_get($p, 'WhatTypeOfTimeOffAreYouRequesting'),
-            'day1'                 => $parsedDates[0],
-            'day2'                 => $parsedDates[1],
-            'day3'                 => $parsedDates[2],
-            'day4'                 => $parsedDates[3],
-            'day5'                 => $parsedDates[4],
-            'day6'                 => $parsedDates[5],
-            'day7'                 => $parsedDates[6],
-            'acceptance_rejection' => data_get($p, 'CorrespondenceInternalUseOnly.AcceptanceRejection'),
-        ];
+    if (!empty($requestedFirst)) {
+        $group = $requested;
+    } elseif (!empty($paidFirst)) {
+        $group = $paid;
+    } else {
+        // Fallback (neither has a first date) – keep empty to produce nulls
+        $group = [];
     }
+
+    $dateKeys = [
+        'DateOfFirstDayOff',
+        'DateOfSecondDayOff',
+        'DateOfThirdDayOff',
+        'DateOfForthDayOff',
+        'DateOfFifthDayOff',
+        'DateOfSixthDayOff',
+        'DateOfSeventhDayOff',
+    ];
+
+    $parsedDates = [];
+    foreach ($dateKeys as $idx => $key) {
+        $val = Arr::get($group, $key);
+        $parsedDates[$idx] = $this->parseDateOrNull($val); // returns Y-m-d or null
+    }
+
+    return [
+        'full_id'              => data_get($p, 'Id'), // e.g. "54-562"
+        'full_name'            => $fullName,
+        'date_submitted'       => $this->parseDateTimeOrNull(data_get($p, 'Entry.DateSubmitted')),
+        'time_off_type'        => data_get($p, 'WhatTypeOfTimeOffAreYouRequesting'),
+        'day1'                 => $parsedDates[0],
+        'day2'                 => $parsedDates[1],
+        'day3'                 => $parsedDates[2],
+        'day4'                 => $parsedDates[3],
+        'day5'                 => $parsedDates[4],
+        'day6'                 => $parsedDates[5],
+        'day7'                 => $parsedDates[6],
+        'acceptance_rejection' => data_get($p, 'CorrespondenceInternalUseOnly.AcceptanceRejection'),
+    ];
+}
+
 
     private function parseDateOrNull($value): ?string
     {
